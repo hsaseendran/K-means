@@ -1,0 +1,81 @@
+# Executables
+kmeans_cuda
+generate_data
+
+# Generated data files
+*.txt
+!requirements.txt
+
+# Output files
+kmeans_out_*
+*_data.txt
+*_assignments.txt
+*_centroids.txt
+*_visualization.png
+
+# CUDA compiled files
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+*.o
+*.obj
+
+# C++ compiled files
+*.slo
+*.lo
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.lai
+*.la
+*.a
+*.lib
+*.exe
+*.out
+*.app
+
+# Build directory
+build/
+bin/
+
+# CMake related
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
+
+# Editor and IDE files
+.vscode/
+.idea/
+*~
+.*.swp
+.*.swo
+*.swp
+*.swo
+
+# Python cache and environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env/
+.venv/
+.python-version
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

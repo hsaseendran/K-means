@@ -67,10 +67,6 @@ void initializeCentroids(KMeansData* data) {
 
 // Free allocated memory
 void freeMemory(KMeansData* data, float* d_data, float* d_centroids, int* d_assignments) {
-    free(data->centroids);
-    free(data->assignments);
-    free(data->counts);
-    
     cudaFree(d_data);
     cudaFree(d_centroids);
     cudaFree(d_assignments);
@@ -126,51 +122,58 @@ __global__ void findClosestCentroidHighDim(float* data, float* centroids, int* a
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     
-    // Calculate global indices
-    int indexD = data + (by * TILE_HEIGHT * d) + (ty * d) + tx;
-    int indexC = centroids + (bx * TILE_WIDTH) + (ty * blockDim.x) + tx;
-    int indexR = assignments + (by * TILE_HEIGHT * k) + (bx * TILE_WIDTH) + (ty * blockDim.x) + tx;
+    // Calculate row and column indices
+    int row = by * TILE_HEIGHT + ty;  // Data point index
+    int col = bx * TILE_WIDTH + tx;   // Centroid or dimension index
     
-    // Temporary result stored in registers
-    float TResult[TILE_WIDTH];
-    for (int i = 0; i < TILE_WIDTH; i++) {
-        TResult[i] = 0.0f;
-    }
+    // Only process valid data points
+    if (row >= n) return;
     
-    // Process data in tiles
-    float* Alast = indexD + d;
-    while (indexD < Alast) {
-        // Load tile of data into shared memory
-        if (tx < d && (by * TILE_HEIGHT + ty) < n) {
-            SMData[tx][ty] = *indexD;
+    // Temporary result stored in registers - accumulated squared distances
+    float dist = 0.0f;
+    
+    // Process data in tiles across dimensions
+    for (int t = 0; t < (d + TILE_WIDTH - 1) / TILE_WIDTH; t++) {
+        // Current dimension starting index
+        int dimStart = t * TILE_WIDTH;
+        
+        // Load a tile of data into shared memory
+        if (dimStart + tx < d) {
+            SMData[tx][ty] = data[row * d + dimStart + tx];
         }
         __syncthreads();
         
-        // Compute distance for this tile
-        for (int i = 0; i < TILE_WIDTH && i < d; i++) {
-            if ((by * TILE_HEIGHT + ty) < n && (bx * TILE_WIDTH + tx) < k) {
-                float diff = SMData[i][ty] - centroids[bx * TILE_WIDTH + tx + i * k];
-                TResult[tx] += diff * diff;
+        // Compute partial distance using the current tile
+        if (col < k) {
+            for (int i = 0; i < TILE_WIDTH && dimStart + i < d; i++) {
+                float diff = SMData[i][ty] - centroids[col * d + dimStart + i];
+                dist += diff * diff;
             }
         }
         
-        indexD += TILE_WIDTH;
         __syncthreads();
     }
     
     // Find minimum distance and assign cluster
-    if ((by * TILE_HEIGHT + ty) < n && (bx * TILE_WIDTH + tx) < k) {
-        float minDist = TResult[0];
-        int minIndex = 0;
+    if (row < n && tx == 0) {
+        int closest = 0;
+        float min_dist = FLT_MAX;
         
-        for (int i = 1; i < TILE_WIDTH && i < k; i++) {
-            if (TResult[i] < minDist) {
-                minDist = TResult[i];
-                minIndex = i;
+        // Find the closest centroid for this data point
+        for (int c = 0; c < k; c++) {
+            float centroid_dist = 0.0f;
+            for (int j = 0; j < d; j++) {
+                float diff = data[row * d + j] - centroids[c * d + j];
+                centroid_dist += diff * diff;
+            }
+            
+            if (centroid_dist < min_dist) {
+                min_dist = centroid_dist;
+                closest = c;
             }
         }
         
-        assignments[by * TILE_HEIGHT + ty] = bx * TILE_WIDTH + minIndex;
+        assignments[row] = closest;
     }
 }
 
@@ -356,11 +359,66 @@ void kmeansHighDim(KMeansData* data) {
     freeMemory(data, d_data, d_centroids, d_assignments);
 }
 
-// Main entry point
+// Save data points to file
+void saveDataToFile(KMeansData* data, const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", filename);
+        return;
+    }
+    
+    for (int i = 0; i < data->n; i++) {
+        for (int j = 0; j < data->d; j++) {
+            fprintf(file, "%.6f ", data->data[i * data->d + j]);
+        }
+        fprintf(file, "\n");
+    }
+    
+    fclose(file);
+    printf("Data points saved to %s\n", filename);
+}
+
+// Save cluster assignments to file
+void saveAssignmentsToFile(KMeansData* data, const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", filename);
+        return;
+    }
+    
+    for (int i = 0; i < data->n; i++) {
+        fprintf(file, "%d\n", data->assignments[i]);
+    }
+    
+    fclose(file);
+    printf("Cluster assignments saved to %s\n", filename);
+}
+
+// Save centroids to file
+void saveCentroidsToFile(KMeansData* data, const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", filename);
+        return;
+    }
+    
+    for (int i = 0; i < data->k; i++) {
+        for (int j = 0; j < data->d; j++) {
+            fprintf(file, "%.6f ", data->centroids[i * data->d + j]);
+        }
+        fprintf(file, "\n");
+    }
+    
+    fclose(file);
+    printf("Centroids saved to %s\n", filename);
+}
+
+// Modify the main function as follows:
+
 int main(int argc, char** argv) {
     // Check for command line arguments
     if (argc < 5) {
-        printf("Usage: %s <data_file> <n> <d> <k> [max_iterations] [threshold]\n", argv[0]);
+        printf("Usage: %s <data_file> <n> <d> <k> [max_iterations] [threshold] [output_prefix]\n", argv[0]);
         return 1;
     }
     
@@ -371,6 +429,9 @@ int main(int argc, char** argv) {
     int k = atoi(argv[4]);  // number of clusters
     int max_iterations = (argc > 5) ? atoi(argv[5]) : 100;
     float threshold = (argc > 6) ? atof(argv[6]) : 1e-4;
+    
+    // Output prefix for visualization files (optional)
+    const char* output_prefix = (argc > 7) ? argv[7] : "kmeans_out";
     
     // Initialize k-means data
     KMeansData kmeans_data;
@@ -441,11 +502,26 @@ int main(int argc, char** argv) {
         printf("\n");
     }
     
-    // Cleanup
+    // Save output files for visualization if dimensions <= 3
+    if (d <= 3) {
+        char data_file[256], assignments_file[256], centroids_file[256];
+        sprintf(data_file, "%s_data.txt", output_prefix);
+        sprintf(assignments_file, "%s_assignments.txt", output_prefix);
+        sprintf(centroids_file, "%s_centroids.txt", output_prefix);
+        
+        saveDataToFile(&kmeans_data, data_file);
+        saveAssignmentsToFile(&kmeans_data, assignments_file);
+        saveCentroidsToFile(&kmeans_data, centroids_file);
+        
+        printf("\nTo visualize results, run:\n");
+        printf("python visualize_kmeans.py --data %s --assignments %s --centroids %s --dimensions %d\n", 
+               data_file, assignments_file, centroids_file, d);
+    }
+    
+    // Cleanup - only free the memory we allocated in main()
     free(kmeans_data.data);
-    free(kmeans_data.centroids);
-    free(kmeans_data.assignments);
-    free(kmeans_data.counts);
+    // The rest will be freed in the kmeansLowDim/kmeansHighDim functions
+    // Already freed: kmeans_data.centroids, kmeans_data.assignments, kmeans_data.counts
     
     return 0;
 }
