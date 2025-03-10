@@ -79,11 +79,11 @@ run_visualization_random_3d: all
 	./run_visualization.sh --dimensions 3 --points 10000 --clusters 5 --random
 
 # Generate test data (clustered)
-generate_data: $(DATA_GEN_EXE)
+gen_data: $(DATA_GEN_EXE)
 	./$(DATA_GEN_EXE) 10000 2 test_data.txt 5
 
 # Generate random test data
-generate_random_data: $(DATA_GEN_EXE)
+gen_random_data: $(DATA_GEN_EXE)
 	./$(DATA_GEN_EXE) 10000 2 test_data.txt 0 --random
 
-.PHONY: all clean run_visualization run_visualization_3d run_visualization_1d run_visualization_random run_visualization_random_3d generate_data generate_random_data setup_visualization
+.PHONY: all clean run_visualization run_visualization_3d run_visualization_1d run_visualization_random run_visualization_random_3d gen_data gen_random_data setup_visualization
