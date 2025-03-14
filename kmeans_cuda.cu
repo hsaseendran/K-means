@@ -57,7 +57,7 @@ void allocateMemory(KMeansData* data) {
 // Initialize centroids randomly from data points
 void initializeCentroids(KMeansData* data) {
     // Use the first k data points as initial centroids
-    // In a real implementation, you might want to use k-means++ or random selection
+    // TODO : Use Kmeans++ or random selection
     for (int i = 0; i < data->k; i++) {
         for (int j = 0; j < data->d; j++) {
             data->centroids[i * data->d + j] = data->data[i * data->d + j];
