@@ -5,7 +5,7 @@ NVCC = nvcc
 CXX = g++
 
 # Compiler flags
-NVCC_FLAGS = -O3 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_70,code=sm_70
+NVCC_FLAGS = -O3 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80
 CXX_FLAGS = -O3 -Wall -Wextra
 
 # Include directories
